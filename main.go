@@ -8,37 +8,52 @@ import (
 	"strings"
 )
 
+func getLinesChannel(f io.ReadCloser) <-chan string {
+
+	strChan := make(chan string)
+
+	var currentLine string
+
+	go func() {
+		for {
+			buffer := make([]byte, 8)
+			n, err := f.Read(buffer)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			str := string(buffer[:n])
+			parts := strings.Split(str, "\n")
+
+			for i := 0; i < len(parts)-1; i++ {
+				strChan <- fmt.Sprintf("%s%s", currentLine, parts[i])
+				currentLine = ""
+			}
+			currentLine += parts[len(parts)-1]
+		}
+
+		strChan <- currentLine
+
+		close(strChan)
+		f.Close()
+	}()
+
+	return strChan
+
+}
+
 func main() {
 	file, err := os.Open("messages.txt")
 	if err != nil {
 		log.Fatal("failed to open")
 	}
 
-	var currentLine string
+	returnedChan := getLinesChannel(file)
 
-	for {
-		buffer := make([]byte, 8)
-		n, err := file.Read(buffer)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		str := string(buffer[:n])
-		parts := strings.Split(str, "\n")
-
-		for i := 0; i < len(parts)-1; i++ {
-			fmt.Printf("read: %s%s\n", currentLine, parts[i])
-			currentLine = ""
-		}
-		currentLine += parts[len(parts)-1]
-	}
-
-	if currentLine != "" {
-		fmt.Printf("read: %s\n", currentLine)
+	for line := range returnedChan {
+		fmt.Println("read:", line)
 	}
 }
-
-
