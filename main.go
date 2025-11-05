@@ -12,9 +12,12 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 
 	strChan := make(chan string)
 
-	var currentLine string
-
 	go func() {
+		defer f.Close()
+		defer close(strChan)
+
+		var currentLine string
+
 		for {
 			buffer := make([]byte, 8)
 			n, err := f.Read(buffer)
@@ -36,9 +39,6 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 		}
 
 		strChan <- currentLine
-
-		close(strChan)
-		f.Close()
 	}()
 
 	return strChan
