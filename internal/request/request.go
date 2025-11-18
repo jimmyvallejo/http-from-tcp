@@ -2,7 +2,6 @@ package request
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"unicode"
@@ -10,6 +9,7 @@ import (
 
 type Request struct {
 	RequestLine RequestLine
+	enum        int
 }
 
 type RequestLine struct {
@@ -20,34 +20,97 @@ type RequestLine struct {
 
 const supportedVersion = "1.1"
 
+const bufferSize = 8
+
 func RequestFromReader(reader io.Reader) (*Request, error) {
 
-	read, err := io.ReadAll(reader)
-	if err != nil {
-		fmt.Printf("failed to read, err: %e", err)
+	buf := make([]byte, bufferSize)
+
+	readToIndex := 0
+
+	req := Request{enum: 0}
+
+	for {
+		if readToIndex == len(buf) {
+			nb := make([]byte, len(buf)*2)
+			copy(nb, buf[:readToIndex])
+			buf = nb
+		}
+
+		n, err := reader.Read(buf[readToIndex:])
+		if n > 0 {
+			readToIndex += n
+
+			parsed, perr := req.parse(buf[:readToIndex])
+			if perr != nil {
+				return nil, perr
+			}
+			if parsed > 0 {
+				copy(buf, buf[parsed:readToIndex])
+				readToIndex -= parsed
+			}
+			if req.enum == 1 {
+				return &req, nil
+			}
+		}
+		if err == io.EOF {
+			parsed, perr := req.parse(buf[:readToIndex])
+			if perr != nil {
+				return nil, perr
+			}
+			if parsed > 0 {
+				copy(buf, buf[parsed:readToIndex])
+				readToIndex -= parsed
+			}
+			if req.enum == 1 {
+				return &req, nil
+			}
+			return nil, io.EOF
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	s := string(read)
-
-	return parseRequestLine(s)
-
 }
 
-func parseRequestLine(readerString string) (*Request, error) {
+func (r *Request) parse(data []byte) (int, error) {
+	if r.enum == 0 {
+		reqLine, bytes, err := parseRequestLine(string(data))
+		if err != nil {
+			return 0, err
+		}
+		if bytes == 0 {
+			return 0, nil
+		}
+		r.enum = 1
+		r.RequestLine = reqLine
+		return bytes, nil
+	}
+	if r.enum == 1 {
+		return 0, errors.New("error: trying to read data in a done state")
+	}
+
+	return 0, errors.New("error: unknown state")
+}
+
+func parseRequestLine(readerString string) (RequestLine, int, error) {
 
 	lines := strings.Split(readerString, "\r\n")
+	if len(lines) < 2 {
+		return RequestLine{}, 0, nil
+	}
 
 	line := lines[0]
 
 	parts := strings.Split(line, " ")
 
 	if len(parts) < 3 {
-		return nil, errors.New("line length is incorrect")
+		return RequestLine{}, 0, errors.New("line length is incorrect")
 	}
 
 	method := parts[0]
 	if !isAllUpperAlpha(method) {
-		return nil, errors.New("method is incorrect")
+		return RequestLine{}, 0, errors.New("method is incorrect")
 	}
 
 	requestTarget := parts[1]
@@ -58,7 +121,7 @@ func parseRequestLine(readerString string) (*Request, error) {
 	version := versionParts[1]
 
 	if version != supportedVersion {
-		return nil, errors.New("version is incorrect")
+		return RequestLine{}, 0, errors.New("version is incorrect")
 	}
 
 	requestLine := RequestLine{
@@ -67,11 +130,9 @@ func parseRequestLine(readerString string) (*Request, error) {
 		Method:        method,
 	}
 
-	request := Request{
-		RequestLine: requestLine,
-	}
+	bytesConsumed := len(line) + 2
 
-	return &request, nil
+	return requestLine, bytesConsumed, nil
 
 }
 
