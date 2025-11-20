@@ -53,7 +53,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				return &req, nil
 			}
 		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			parsed, perr := req.parse(buf[:readToIndex])
 			if perr != nil {
 				return nil, perr
