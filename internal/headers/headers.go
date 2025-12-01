@@ -16,19 +16,17 @@ var headerNameRegex = regexp.MustCompile(`^[a-zA-Z0-9!#$%&'*+\-.^_` + "`" + `|~]
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
-	contains := bytes.Contains(data, []byte("\r\n"))
-	if !contains {
+	idx := bytes.Index(data, []byte("\r\n"))
+	if idx == -1 {
 		return 0, false, nil
 	}
+	line := data[:idx]
 
-	startsWith := bytes.HasPrefix(data, []byte("\r\n"))
-	if startsWith {
-		return 2, true, nil
+	if len(line) == 0 {
+		return idx + 2, true, nil
 	}
 
-	trimmed := bytes.TrimSpace(data)
-
-	splitted := bytes.SplitN(trimmed, []byte(":"), 2)
+	splitted := bytes.SplitN(line, []byte(":"), 2)
 
 	toCheck := splitted[0]
 
@@ -50,8 +48,6 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	} else {
 		h[string(keyToLower)] = string(fieldValue)
 	}
-
-	idx := bytes.Index(data, []byte("\r\n"))
 
 	return idx + 2, false, nil
 

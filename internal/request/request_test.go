@@ -93,7 +93,7 @@ func TestRequestHeaders(t *testing.T) {
 	}
 	r, err := RequestFromReader(reader)
 	require.NoError(t, err)
-	require.NotNil(t, err)
+	require.NotNil(t, r)
 	assert.Equal(t, "localhost:42069", r.Headers["host"])
 	assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
 	assert.Equal(t, "*/*", r.Headers["accept"])
@@ -111,18 +111,18 @@ func TestRequestHeaders(t *testing.T) {
 		data:            "GET / HTTP/1.1\r\n\r\n\r\n",
 		numBytesPerRead: 3,
 	}
-	_, err = RequestFromReader(reader)
+	r, err = RequestFromReader(reader)
 	require.NoError(t, err)
-	require.NotNil(t, err)
+	require.NotNil(t, r)
 
 	// Test: Duplicate Headers
 	reader = &chunkReader{
 		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
 		numBytesPerRead: 3,
 	}
-	_, err = RequestFromReader(reader)
+	r, err = RequestFromReader(reader)
 	require.NoError(t, err)
-	require.NotNil(t, err)
+	require.NotNil(t, r)
 	assert.Equal(t, "localhost:42069, localhost:8080", r.Headers["host"])
 	assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
 	assert.Equal(t, "*/*", r.Headers["accept"])
@@ -132,10 +132,10 @@ func TestRequestHeaders(t *testing.T) {
 		data:            "GET / HTTP/1.1\r\nHOST: localhost:8080\r\nUsEr-AgeNt: curl/7.81.0\r\nAccepT: */*\r\n\r\n",
 		numBytesPerRead: 3,
 	}
-	_, err = RequestFromReader(reader)
+	r, err = RequestFromReader(reader)
 	require.NoError(t, err)
-	require.NotNil(t, err)
-	assert.Equal(t, "localhost:42069, localhost:8080", r.Headers["host"])
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:8080", r.Headers["host"])
 	assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
 	assert.Equal(t, "*/*", r.Headers["accept"])
 

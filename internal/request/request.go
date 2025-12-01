@@ -37,7 +37,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	readToIndex := 0
 
-	req := Request{enum: requestStateParsingLine}
+	req := Request{enum: requestStateParsingLine, Headers: headers.NewHeaders()}
 
 	for {
 		if readToIndex == len(buf) {
@@ -89,6 +89,9 @@ func (r *Request) parse(data []byte) (int, error) {
 		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
 			return 0, err
+		}
+		if n == 0 {
+			break
 		}
 		totalBytesParsed += n
 	}
@@ -157,7 +160,10 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		
+		if done {
+			r.enum = requestStateDone
+		}
+		return n, err
 	case requestStateDone:
 		return 0, errors.New("error: trying to read data in a done state")
 	}
