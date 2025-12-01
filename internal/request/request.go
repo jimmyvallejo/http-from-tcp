@@ -5,11 +5,14 @@ import (
 	"io"
 	"strings"
 	"unicode"
+
+	"github.com/jimmyvallejo/httpfromtcp/internal/headers"
 )
 
 type Request struct {
 	RequestLine RequestLine
 	enum        int
+	Headers     headers.Headers
 }
 
 type RequestLine struct {
@@ -17,6 +20,12 @@ type RequestLine struct {
 	RequestTarget string
 	Method        string
 }
+
+const (
+	requestStateParsingLine    = 0
+	requestStateDone           = 1
+	requestStateParsingHeaders = 2
+)
 
 const supportedVersion = "1.1"
 
@@ -28,7 +37,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	readToIndex := 0
 
-	req := Request{enum: 0}
+	req := Request{enum: requestStateParsingLine}
 
 	for {
 		if readToIndex == len(buf) {
@@ -49,7 +58,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				copy(buf, buf[parsed:readToIndex])
 				readToIndex -= parsed
 			}
-			if req.enum == 1 {
+			if req.enum == requestStateDone {
 				return &req, nil
 			}
 		}
@@ -62,7 +71,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				copy(buf, buf[parsed:readToIndex])
 				readToIndex -= parsed
 			}
-			if req.enum == 1 {
+			if req.enum == requestStateDone {
 				return &req, nil
 			}
 			return nil, io.EOF
@@ -74,23 +83,16 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	if r.enum == 0 {
-		reqLine, bytes, err := parseRequestLine(string(data))
+
+	totalBytesParsed := 0
+	for r.enum != requestStateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
 			return 0, err
 		}
-		if bytes == 0 {
-			return 0, nil
-		}
-		r.enum = 1
-		r.RequestLine = reqLine
-		return bytes, nil
+		totalBytesParsed += n
 	}
-	if r.enum == 1 {
-		return 0, errors.New("error: trying to read data in a done state")
-	}
-
-	return 0, errors.New("error: unknown state")
+	return totalBytesParsed, nil
 }
 
 func parseRequestLine(readerString string) (RequestLine, int, error) {
@@ -134,6 +136,32 @@ func parseRequestLine(readerString string) (RequestLine, int, error) {
 
 	return requestLine, bytesConsumed, nil
 
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.enum {
+	case requestStateParsingLine:
+		reqLine, bytes, err := parseRequestLine(string(data))
+		if err != nil {
+			return 0, err
+		}
+		if bytes == 0 {
+			return 0, nil
+		}
+		r.enum = requestStateParsingHeaders
+		r.RequestLine = reqLine
+		return bytes, nil
+
+	case requestStateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		
+	case requestStateDone:
+		return 0, errors.New("error: trying to read data in a done state")
+	}
+	return 0, errors.New("error: unknown state")
 }
 
 func isAllUpperAlpha(s string) bool {

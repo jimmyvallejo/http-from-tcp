@@ -44,7 +44,7 @@ func TestHeaders(t *testing.T) {
 	assert.Equal(t, 34, n)
 	assert.False(t, done)
 
-	// Test Multiple Values
+	// Test Multiple Keys
 
 	headers = NewHeaders()
 	data1 := []byte("Content-Type: application/json\r\n\r\n")
@@ -62,4 +62,14 @@ func TestHeaders(t *testing.T) {
 	assert.Equal(t, "Bearer token123", headers["authorization"])
 	assert.Equal(t, "localhost:42069", headers["host"])
 
+	// Test Multiple Keys
+	headers = NewHeaders()
+	data1 = []byte("Host: localhost:42069\r\n\r\n")
+	_, _, _ = headers.Parse(data1)
+	data2 = []byte("Host: localhost:8080\r\n\r\n")
+	n, done, err = headers.Parse(data2)
+	require.NoError(t, err)
+	assert.False(t, done)
+	assert.Greater(t, n, 0)
+	assert.Equal(t, "localhost:42069, localhost:8080", headers["host"])
 }
