@@ -32,7 +32,9 @@ func main() {
 		fmt.Println("- Method:", returnedReq.RequestLine.Method)
 		fmt.Println("- Target:", returnedReq.RequestLine.RequestTarget)
 		fmt.Println("- Version:", returnedReq.RequestLine.HttpVersion)
+		fmt.Println("Headers:")
+		for key, item := range returnedReq.Headers {
+			fmt.Println("- " + key + ": " + item)
+		}
 	}
-
 }
-
