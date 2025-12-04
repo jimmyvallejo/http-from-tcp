@@ -3,16 +3,18 @@ package request
 import (
 	"errors"
 	"io"
+	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/jimmyvallejo/httpfromtcp/internal/headers"
 )
 
 type Request struct {
 	RequestLine RequestLine
-	enum        int
+	Enum        int
 	Headers     headers.Headers
+	Body        []byte
+	BodyLength  int
 }
 
 type RequestLine struct {
@@ -25,6 +27,7 @@ const (
 	requestStateParsingLine    = 0
 	requestStateDone           = 1
 	requestStateParsingHeaders = 2
+	requestStateParsingBody    = 3
 )
 
 const supportedVersion = "1.1"
@@ -37,7 +40,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	readToIndex := 0
 
-	req := Request{enum: requestStateParsingLine, Headers: headers.NewHeaders()}
+	req := Request{Enum: requestStateParsingLine, Headers: headers.NewHeaders(), Body: []byte{}}
 
 	for {
 		if readToIndex == len(buf) {
@@ -58,7 +61,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				copy(buf, buf[parsed:readToIndex])
 				readToIndex -= parsed
 			}
-			if req.enum == requestStateDone {
+			if req.Enum == requestStateDone {
 				return &req, nil
 			}
 		}
@@ -71,7 +74,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 				copy(buf, buf[parsed:readToIndex])
 				readToIndex -= parsed
 			}
-			if req.enum == requestStateDone {
+			if req.Enum == requestStateDone {
 				return &req, nil
 			}
 			return nil, io.EOF
@@ -85,7 +88,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 func (r *Request) parse(data []byte) (int, error) {
 
 	totalBytesParsed := 0
-	for r.enum != requestStateDone {
+	for r.Enum != requestStateDone {
 		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
 			return 0, err
@@ -96,6 +99,62 @@ func (r *Request) parse(data []byte) (int, error) {
 		totalBytesParsed += n
 	}
 	return totalBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.Enum {
+	case requestStateParsingLine:
+		reqLine, bytes, err := parseRequestLine(string(data))
+		if err != nil {
+			return 0, err
+		}
+		if bytes == 0 {
+			return 0, nil
+		}
+		r.Enum = requestStateParsingHeaders
+		r.RequestLine = reqLine
+		return bytes, nil
+
+	case requestStateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if done {
+			r.Enum = requestStateParsingBody
+		}
+		return n, err
+
+	case requestStateParsingBody:
+		length, ok := r.Headers.Get("Content-Length")
+		if !ok {
+			r.Enum = requestStateDone
+			return 0, nil
+		}
+
+		r.Body = append(r.Body, data...)
+
+		numberRaw := length
+		numberTrimmed := strings.TrimSpace(numberRaw)
+
+		n, err := strconv.Atoi(numberTrimmed)
+		if err != nil {
+			return 0, errors.New("invalid content length")
+		}
+
+		r.BodyLength += len(data)
+
+		if n == r.BodyLength {
+			r.Enum = requestStateDone
+		} else if r.BodyLength > n {
+			return 0, errors.New("invalid content length")
+		}
+		return len(data), nil
+
+	case requestStateDone:
+		return 0, errors.New("error: trying to read data in a done state")
+	}
+	return 0, errors.New("error: unknown state")
 }
 
 func parseRequestLine(readerString string) (RequestLine, int, error) {
@@ -139,46 +198,4 @@ func parseRequestLine(readerString string) (RequestLine, int, error) {
 
 	return requestLine, bytesConsumed, nil
 
-}
-
-func (r *Request) parseSingle(data []byte) (int, error) {
-	switch r.enum {
-	case requestStateParsingLine:
-		reqLine, bytes, err := parseRequestLine(string(data))
-		if err != nil {
-			return 0, err
-		}
-		if bytes == 0 {
-			return 0, nil
-		}
-		r.enum = requestStateParsingHeaders
-		r.RequestLine = reqLine
-		return bytes, nil
-
-	case requestStateParsingHeaders:
-		n, done, err := r.Headers.Parse(data)
-		if err != nil {
-			return 0, err
-		}
-		if done {
-			r.enum = requestStateDone
-		}
-		return n, err
-	case requestStateDone:
-		return 0, errors.New("error: trying to read data in a done state")
-	}
-	return 0, errors.New("error: unknown state")
-}
-
-func isAllUpperAlpha(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-
-	for _, r := range s {
-		if !unicode.IsUpper(r) || !unicode.IsLetter(r) {
-			return false
-		}
-	}
-	return true
 }

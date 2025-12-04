@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"regexp"
+	"strings"
 )
 
 type Headers map[string]string
@@ -13,6 +14,14 @@ func NewHeaders() Headers {
 }
 
 var headerNameRegex = regexp.MustCompile(`^[a-zA-Z0-9!#$%&'*+\-.^_` + "`" + `|~]+$`)
+
+func (h Headers) Get(key string) (string, bool) {
+
+	lowered := strings.ToLower(key)
+
+	value, ok := h[lowered]
+	return value, ok
+}
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
