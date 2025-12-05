@@ -1,26 +1,18 @@
-package httpserver
+package main
 
 import (
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
-)
 
-type Server struct{}
+	"github.com/jimmyvallejo/httpfromtcp/internal/server"
+)
 
 const port = 42069
 
-func Serve(port int) (*Server, error) {
-	l, err := net.Listen("tcp", ":"+string(port))
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func main() {
-	server, err := Server.Serve(port)
+	server, err := server.Serve(port)
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
