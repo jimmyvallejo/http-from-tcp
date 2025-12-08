@@ -1,21 +1,23 @@
 package server
 
 import (
+	"bytes"
 	"log"
 	"net"
 	"strconv"
 	"sync/atomic"
 
+	"github.com/jimmyvallejo/httpfromtcp/internal/request"
 	"github.com/jimmyvallejo/httpfromtcp/internal/response"
 )
 
 type Server struct {
 	listener net.Listener
-	conn     net.Conn
 	running  atomic.Bool
+	handler  Handler
 }
 
-func Serve(port int) (*Server, error) {
+func Serve(port int, handler Handler) (*Server, error) {
 
 	portString := strconv.Itoa(port)
 
@@ -25,6 +27,7 @@ func Serve(port int) (*Server, error) {
 	}
 
 	serv := Server{
+		handler:  handler,
 		listener: l,
 	}
 
@@ -40,9 +43,9 @@ func (s *Server) listen() {
 			if s.running.Load() {
 				log.Fatal(err)
 			}
-			return
+			log.Printf("Error accepting connection: %v", err)
+			continue
 		}
-		s.conn = conn
 		go s.handle(conn)
 	}
 
@@ -50,13 +53,32 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-
-	response.WriteStatusLine(conn, 200)
-	headers := response.GetDefaultHeaders(0)
+	req, err := request.RequestFromReader(conn)
+	if err != nil {
+		hErr := &HandlerError{
+			StatusCode: response.StatusCodeBadRequest,
+			Message:    err.Error(),
+		}
+		hErr.Write(conn)
+		return
+	}
+	buf := bytes.NewBuffer([]byte{})
+	hErr := s.handler(buf, req)
+	if hErr != nil {
+		hErr.Write(conn)
+		return
+	}
+	b := buf.Bytes()
+	response.WriteStatusLine(conn, response.StatusCodeOk)
+	headers := response.GetDefaultHeaders(len(b))
 	response.WriteHeaders(conn, headers)
+	conn.Write(b)
 }
 
-func (s *Server) Close() {
-	s.listener.Close()
-	s.conn.Close()
+func (s *Server) Close() error {
+	s.running.Store(true)
+	if s.listener != nil {
+		return s.listener.Close()
+	}
+	return nil
 }
