@@ -25,4 +25,4 @@ func (e HandlerError) Write(w response.Writer) {
 	w.Dest.Write(messageBytes)
 }
 
-type Handler func(w response.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)

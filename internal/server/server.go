@@ -67,11 +67,7 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
-	hErr := s.handler(writer, req)
-	if hErr != nil {
-		hErr.Write(writer)
-		return
-	}
+	s.handler(&writer, req)
 }
 
 func (s *Server) Close() error {
