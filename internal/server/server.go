@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -9,6 +10,8 @@ import (
 	"github.com/jimmyvallejo/httpfromtcp/internal/request"
 	"github.com/jimmyvallejo/httpfromtcp/internal/response"
 )
+
+type Handler func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	listener net.Listener
@@ -53,21 +56,20 @@ func (s *Server) listen() {
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 
-	writer := response.Writer{
+	w := response.Writer{
 		WriterState: 0,
 		Dest:        conn,
 	}
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		hErr := &HandlerError{
-			StatusCode: response.StatusCodeBadRequest,
-			Message:    err.Error(),
-		}
-		hErr.Write(writer)
+		w.WriteStatusLine(response.StatusCodeBadRequest)
+		body := []byte(fmt.Sprintf("Error parsing request: %v", err))
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.Dest.Write(body)
 		return
 	}
 
-	s.handler(&writer, req)
+	s.handler(&w, req)
 }
 
 func (s *Server) Close() error {
