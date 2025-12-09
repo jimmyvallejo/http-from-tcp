@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"log"
 	"net"
 	"strconv"
@@ -53,26 +52,26 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
+
+	writer := response.Writer{
+		WriterState: 0,
+		Dest:        conn,
+	}
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
 		hErr := &HandlerError{
 			StatusCode: response.StatusCodeBadRequest,
 			Message:    err.Error(),
 		}
-		hErr.Write(conn)
+		hErr.Write(writer)
 		return
 	}
-	buf := bytes.NewBuffer([]byte{})
-	hErr := s.handler(buf, req)
+
+	hErr := s.handler(writer, req)
 	if hErr != nil {
-		hErr.Write(conn)
+		hErr.Write(writer)
 		return
 	}
-	b := buf.Bytes()
-	response.WriteStatusLine(conn, response.StatusCodeOk)
-	headers := response.GetDefaultHeaders(len(b))
-	response.WriteHeaders(conn, headers)
-	conn.Write(b)
 }
 
 func (s *Server) Close() error {

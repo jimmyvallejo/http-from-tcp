@@ -23,6 +23,17 @@ func (h Headers) Get(key string) (string, bool) {
 	return value, ok
 }
 
+func (h Headers) Override(key, value string) error {
+	_, ok := h[key]
+	if !ok {
+		return errors.New("failed to find key in headers")
+	}
+
+	h[key] = value
+
+	return nil
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 	idx := bytes.Index(data, []byte("\r\n"))

@@ -10,31 +10,44 @@ import (
 
 type StatusCode int
 
+type Writer struct {
+	WriterState Writerstate
+	Dest        io.Writer
+}
+
+type Writerstate int
+
+const (
+	WriterStateStart Writerstate = iota
+	WriterStateLine
+	WriterStateHeaders
+)
+
 const (
 	StatusCodeOk                  = 200
 	StatusCodeBadRequest          = 400
 	StatusCodeInternalServerError = 500
 )
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	switch statusCode {
 	case StatusCodeOk:
-		_, err := w.Write([]byte("HTTP/1.1 200 OK\r\n"))
+		_, err := w.Dest.Write([]byte("HTTP/1.1 200 OK\r\n"))
 		if err != nil {
 			return errors.New("failed to write to io.Writer")
 		}
 	case StatusCodeBadRequest:
-		_, err := w.Write([]byte("HTTP/1.1 400 Bad Request\r\n"))
+		_, err := w.Dest.Write([]byte("HTTP/1.1 400 Bad Request\r\n"))
 		if err != nil {
 			return errors.New("failed to write to io.Writer")
 		}
 	case StatusCodeInternalServerError:
-		_, err := w.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n"))
+		_, err := w.Dest.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n"))
 		if err != nil {
 			return errors.New("failed to write to io.Writer")
 		}
 	default:
-		_, err := w.Write([]byte("HTTP/1.1\r\n"))
+		_, err := w.Dest.Write([]byte("HTTP/1.1\r\n"))
 		if err != nil {
 			return errors.New("failed to write to io.Writer")
 		}
@@ -51,14 +64,14 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 	return headers
 }
 
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	for key, item := range headers {
 		formatted := []byte(key + ": " + item + "\r\n")
-		_, err := w.Write(formatted)
+		_, err := w.Dest.Write(formatted)
 		if err != nil {
 			return errors.New("failed to write to io.Writer")
 		}
 	}
-	w.Write([]byte("\r\n"))
+	w.Dest.Write([]byte("\r\n"))
 	return nil
 }
